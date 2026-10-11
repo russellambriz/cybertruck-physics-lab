@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Cybertruck Physics &amp; Chemistry Lab — interactive 3D</title>
+<meta name="description" content="Unofficial, educational interactive 3D Cybertruck: drive dynamics, aerodynamics, 4680 battery electrochemistry, stainless steel and armor-glass materials science. Built with Three.js.">
+<meta name="theme-color" content="#07090c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cpath d=%22M4 40 L34 18 L60 30 L60 46 L4 46Z%22 fill=%22%23c9ced3%22/%3E%3Crect x=%224%22 y=%2238%22 width=%2256%22 height=%223%22 fill=%22%234de1ff%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script>
+  // Surface fatal load errors (e.g. CDN blocked) on the loading screen instead of a blank page.
+  window.addEventListener('error', (e) => {
+    const m = document.getElementById('loadMsg');
+    if (m && !window.__appReady) { m.textContent = 'Error: ' + (e.message || 'failed to load'); m.classList.add('err'); }
+  });
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="loader">
+  <div class="logo">CYBERTRUCK<span>PHYSICS &amp; CHEMISTRY LAB</span></div>
+  <div class="bar"><i id="loadBar"></i></div>
+  <p id="loadMsg">Loading Three.js…</p>
+  <p class="fine">Unofficial fan / educational project · all specs approximate</p>
+</div>
+
+<canvas id="scene" aria-label="3D Cybertruck scene"></canvas>
+<div id="labels"></div>
+
+<header id="topbar">
+  <div class="brand"><b>CT</b><span>PHYSICS LAB</span><em>unofficial</em></div>
+  <nav id="tabs" role="tablist">
+    <button data-mode="drive" class="on" title="Drive (1)"><i>01</i>Drive</button>
+    <button data-mode="aero" title="Aero (2)"><i>02</i>Aero</button>
+    <button data-mode="battery" title="Battery (3)"><i>03</i>Battery</button>
+    <button data-mode="materials" title="Materials (4)"><i>04</i>Materials</button>
+  </nav>
+  <div class="tools">
+    <button id="btnPanelL" class="mob" title="Controls panel">☰</button>
+    <button id="btnPanelR" class="mob" title="Telemetry panel">📈</button>
+    <button id="btnCam" title="Cycle camera (C)">🎥 <span id="camName">Orbit</span></button>
+    <button id="btnQuality" title="Render quality">HQ</button>
+    <button id="btnHelp" title="Help (H)">?</button>
+  </div>
+</header>
+
+<aside id="left" class="panel">
+  <!-- DRIVE -->
+  <section data-mode="drive">
+    <h2>Drive dynamics</h2>
+    <div class="field"><label>Trim</label>
+      <div class="seg" id="trimSeg"><button data-v="awd" class="on">AWD · ~600 hp</button><button data-v="beast">Cyberbeast · ~845 hp</button></div>
+    </div>
+    <div class="field"><label>Payload <output id="payloadOut"></output></label><input type="range" id="payload" min="0" max="1134" step="10" value="0"></div>
+    <div class="field"><label>Towing — trailer mass <output id="towOut"></output></label><input type="range" id="tow" min="0" max="4990" step="10" value="0"></div>
+    <div class="field"><label>Road grade <output id="gradeOut"></output></label><input type="range" id="grade" min="-12" max="12" step="0.5" value="0"></div>
+    <div class="field"><label>Air suspension · ground clearance <output id="rideOut"></output></label><input type="range" id="ride" min="200" max="440" step="5" value="305">
+      <div class="chips" id="rideChips"><button data-v="215">Low</button><button data-v="305" class="on">Medium</button><button data-v="370">High</button><button data-v="440">Extract</button></div>
+    </div>
+    <label class="check"><input type="checkbox" id="autoLower" checked> Auto-lower at highway speed</label>
+    <label class="check"><input type="checkbox" id="showForces"> Show force vectors <kbd>F</kbd></label>
+    <label class="check"><input type="checkbox" id="showFlowDrive"> Show airflow</label>
+    <div class="btnrow">
+      <button id="btnLaunch" class="accent">0–60 mph launch</button>
+      <button id="btnBrakeTest">60–0 brake test</button>
+      <button id="btnReset">Reset</button>
+    </div>
+    <div class="spec" id="specCard"></div>
+    <details class="explain"><summary>The physics behind it</summary>
+      <p><b>Newton's 2nd law</b> along the road: <code>m·a = F<sub>traction</sub> − F<sub>drag</sub> − F<sub>roll</sub> − m·g·sinθ − F<sub>brake</sub></code></p>
+      <p><b>Traction</b> is limited by motor torque at low speed, by power at high speed (<code>F = P / v</code>) and by tire grip (<code>F ≤ μ·N</code>).</p>
+      <p><b>Aero drag</b> <code>F<sub>d</sub> = ½ ρ C<sub>d</sub> A v²</code> (ρ ≈ 1.225 kg/m³). Power to beat it grows with <code>v³</code>.</p>
+      <p><b>Rolling resistance</b> <code>F<sub>r</sub> = C<sub>rr</sub>·m·g·cosθ</code> (C<sub>rr</sub> ≈ 0.011 assumed for all-terrain tires).</p>
+      <p><b>Weight transfer</b> <code>ΔN = m·a·h / L</code> — accelerating squats the rear, braking dives the nose; the low battery-floor CG keeps <code>h</code> small.</p>
+      <p><b>Kinetic energy</b> <code>KE = ½ m v²</code> — what the brakes (or regen) must absorb. Stopping distance <code>d ≈ v² / (2·a<sub>brake</sub>)</code>.</p>
+      <p><b>Steering</b> uses a kinematic bicycle model: yaw rate <code>ψ̇ = v·tanδ / L</code>, lateral accel <code>a<sub>y</sub> = v·ψ̇</code> (capped by grip), which rolls the body.</p>
+    </details>
+  </section>
+
+  <!-- AERO -->
+  <section data-mode="aero">
+    <h2>Aerodynamics</h2>
+    <label class="check"><input type="checkbox" id="tunnel" checked> Wind-tunnel mode (truck parked, air moves)</label>
+    <div class="field"><label>Tunnel air speed <output id="tunnelOut"></output></label><input type="range" id="tunnelSpeed" min="0" max="130" step="1" value="70"></div>
+    <div class="field"><label>Drag coefficient C<sub>d</sub> (what-if) <output id="cdOut"></output></label><input type="range" id="cd" min="0.20" max="0.60" step="0.005" value="0.335"></div>
+    <div class="field"><label>Streamline particles <output id="densityOut"></output></label><input type="range" id="density" min="300" max="2400" step="100" value="1100"></div>
+    <div class="kv" id="aeroKV"></div>
+    <div class="legend"><span>slow / high pressure</span><i></i><span>fast / low pressure</span></div>
+    <p class="note">Streamlines are a <b>qualitative</b> potential-flow-style illustration (not CFD) and are slowed 4× for readability. Stagnation at the nose (red), acceleration over the windshield/roof (blue), and a turbulent wake behind the tailgate.</p>
+    <details class="explain" open><summary>Why drag matters</summary>
+      <p><code>F<sub>d</sub> = ½ ρ C<sub>d</sub> A v²</code> and <code>P<sub>d</sub> = F<sub>d</sub>·v ∝ v³</code>. Doubling speed → 4× the force and 8× the power.</p>
+      <p>The Cybertruck's C<sub>d</sub> is commonly cited around <b>~0.33–0.35</b> (approx.); frontal area here is estimated at <b>~3.35 m²</b> and changes with ride height. Typical full-size pickups are often quoted around 0.4–0.5.</p>
+      <p>Lowering the air suspension at speed shrinks frontal area and under-body flow — that's why the truck auto-lowers on the highway.</p>
+    </details>
+  </section>
+
+  <!-- BATTERY -->
+  <section data-mode="battery">
+    <h2>Battery electrochemistry</h2>
+    <label class="check"><input type="checkbox" id="xray" checked> X-ray cutaway <kbd>X</kbd></label>
+    <div class="cellwrap"><canvas id="cellCanvas" width="340" height="230"></canvas><div class="cellstate" id="cellState">IDLE</div></div>
+    <div class="rxn" id="rxn"></div>
+    <div class="meters">
+      <div class="meter"><label>State of charge <output id="socOut"></output></label><div class="mbar"><i id="socBar"></i></div></div>
+      <div class="meter"><label>Pack temperature <output id="tempOut"></output></label><div class="mbar thermal"><i id="tempBar"></i></div></div>
+    </div>
+    <div class="kv" id="battKV"></div>
+    <div class="btnrow">
+      <button id="btnCharge" class="accent">⚡ Plug in DC fast charger <kbd>P</kbd></button>
+      <button id="btnSoc80">SOC → 80%</button>
+      <button id="btnSoc20">SOC → 20%</button>
+    </div>
+    <p class="note">Drive with <kbd>W</kbd> to discharge (ions flow graphite → NMC); lift off or brake for regen, or plug in, to watch them reverse. Charging runs as a 40× time-lapse.</p>
+    <details class="explain"><summary>Pack facts (approximate)</summary>
+      <ul>
+        <li><b>Cells:</b> Tesla 4680 cylindrical cells (46 mm × 80 mm), ~1,336 in the pack, standing upright in a structural floor pack.</li>
+        <li><b>Energy:</b> ~123 kWh usable (reported). <b>Architecture:</b> 800-V class. This sim assumes 216 cells in series (OCV ≈ 670–920 V).</li>
+        <li><b>Chemistry:</b> high-nickel NMC-type cathode (LiMO₂, M = Ni/Mn/Co) and a graphite anode; liquid electrolyte (LiPF₆ salt in carbonate solvents).</li>
+        <li><b>Heat:</b> Joule heating <code>Q̇ = I²R</code> with an assumed effective pack resistance of 0.08 Ω; liquid cooling ramps up above ~30 °C.</li>
+        <li><b>Terminal voltage</b> sags under load: <code>V = OCV − I·R</code>; current from <code>P = V·I</code>.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- MATERIALS -->
+  <section data-mode="materials">
+    <h2>Materials science</h2>
+    <div class="seg" id="matSeg"><button data-v="steel" class="on">Stainless steel</button><button data-v="glass">Armor glass</button></div>
+    <div data-mat="steel">
+      <canvas id="steelCanvas" width="340" height="230"></canvas>
+      <div class="btnrow">
+        <button id="btnScratch" class="accent">Scratch the surface</button>
+        <button id="btnMild">Compare: mild steel</button>
+      </div>
+      <div class="field"><label>Cold-rolling (work hardening) <output id="coldWorkOut"></output></label><input type="range" id="coldWork" min="0" max="100" step="1" value="60"></div>
+      <div class="legend atoms"><span><i style="background:#9aa3ad"></i>Fe</span><span><i style="background:#4bd18b"></i>Cr</span><span><i style="background:#4d9dff"></i>Ni</span><span><i style="background:#ff5a5a"></i>O</span><span><i style="background:#c58cff"></i>Mn/C</span></div>
+      <details class="explain" open><summary>Why it doesn't rust</summary>
+        <p>The exoskeleton is Tesla's cold-rolled <b>"Ultra-Hard 30X"</b> stainless steel. Its exact recipe is proprietary; austenitic stainless like 304 is roughly <b>Fe (balance) · ~18% Cr · ~8% Ni</b> with small Mn, Si, C.</p>
+        <p>With ≳10.5% chromium, Cr at the surface reacts with oxygen: <code>4 Cr + 3 O₂ → 2 Cr₂O₃</code>. This <b>passive film</b> is only ~1–3 nm thick, dense and adherent, so it blocks further oxidation — and if scratched it <b>re-forms</b> in air (self-healing).</p>
+        <p>Plain carbon steel instead forms porous, flaky rust: <code>4 Fe + 3 O₂ + 2n H₂O → 2 Fe₂O₃·nH₂O</code>, which lets corrosion keep going — hence paint.</p>
+        <p><b>Cold rolling</b> multiplies dislocations (⊥) in the crystal; they tangle and block each other, raising strength and hardness (work hardening). The sheet is so hard it's impractical to stamp into curves — one reason for the flat, folded, faceted design.</p>
+      </details>
+    </div>
+    <div data-mat="glass" hidden>
+      <canvas id="glassCanvas" width="340" height="230"></canvas>
+      <div class="btnrow"><button id="btnImpact" class="accent">Impact test</button><button id="btnGlassReset">Reset</button></div>
+      <details class="explain" open><summary>Laminated "Armor Glass"</summary>
+        <p>Tesla describes Armor Glass as a <b>multi-layer laminate</b>; the exact layup isn't public, so this cross-section is <b>illustrative</b>.</p>
+        <p>Glass plies are soda-lime glass (≈ 72% SiO₂, 14% Na₂O, 9% CaO + MgO/Al₂O₃) bonded by polymer interlayers such as <b>PVB</b> (polyvinyl butyral).</p>
+        <p>On impact the outer ply cracks, but the tough interlayer stretches, absorbs energy and keeps the shards bonded, so the projectile is spread over a larger area instead of punching through.</p>
+      </details>
+    </div>
+  </section>
+</aside>
+
+<aside id="right" class="panel">
+  <h2>Telemetry <small id="trimTag"></small></h2>
+  <div class="kv" id="readouts"></div>
+  <div class="chart"><canvas id="histChart" width="280" height="120"></canvas></div>
+  <div class="chart"><canvas id="loadChart" width="280" height="120"></canvas></div>
+  <p class="fine">All values are simplified models using approximate public specs.</p>
+</aside>
+
+<div id="pad">
+  <div class="pad-l">
+    <button data-k="left" aria-label="Steer left">◀</button>
+    <button data-k="right" aria-label="Steer right">▶</button>
+  </div>
+  <div class="hudspeed">
+    <div class="sp"><b id="spd">0</b><span>mph</span></div>
+    <div class="sub"><span id="gear">D</span><span id="spdKmh">0 km/h</span><span id="testMsg"></span></div>
+    <div class="pbar"><i id="pbarNeg"></i><i id="pbarPos"></i></div>
+  </div>
+  <div class="pad-r">
+    <button data-k="brake" class="brk" aria-label="Brake / reverse">BRAKE</button>
+    <button data-k="throttle" class="go" aria-label="Accelerate">GO</button>
+  </div>
+</div>
+
+<div id="help" class="overlay" hidden>
+  <div class="card">
+    <button class="close" id="helpClose" aria-label="Close">×</button>
+    <h2>Controls</h2>
+    <div class="cols">
+      <div>
+        <h3>Drive</h3>
+        <p><kbd>W</kbd>/<kbd>↑</kbd> accelerate · <kbd>S</kbd>/<kbd>↓</kbd> brake (hold at a stop to reverse)</p>
+        <p><kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> steer · <kbd>Space</kbd> hard brake</p>
+        <p><kbd>R</kbd> reset · <kbd>L</kbd> 0–60 launch · <kbd>B</kbd> 60–0 brake test</p>
+        <h3>View</h3>
+        <p>Drag to orbit · scroll / pinch to zoom · right-drag / two-finger to pan</p>
+        <p><kbd>C</kbd> cycle camera · <kbd>F</kbd> force vectors · <kbd>X</kbd> x-ray</p>
+      </div>
+      <div>
+        <h3>Modes</h3>
+        <p><kbd>1</kbd> Drive — dynamics, forces, telemetry</p>
+        <p><kbd>2</kbd> Aero — streamlines, drag vs speed</p>
+        <p><kbd>3</kbd> Battery — 4680 pack x-ray, Li-ion chemistry, I²R heat (<kbd>P</kbd> plug in)</p>
+        <p><kbd>4</kbd> Materials — stainless passivation, armor-glass laminate</p>
+        <h3>Touch</h3>
+        <p>Use the ◀ ▶ / BRAKE / GO pads. Open panels with ☰ and 📈.</p>
+      </div>
+    </div>
+    <p class="fine">Unofficial fan/educational project — not affiliated with Tesla. The truck is built procedurally from simple geometry; all specs and models are approximate.</p>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
